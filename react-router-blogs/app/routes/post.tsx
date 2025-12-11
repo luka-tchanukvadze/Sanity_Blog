@@ -21,7 +21,14 @@ export async function loader({ params }: Route.LoaderArgs) {
 }
 
 export default function Component({ loaderData }: Route.ComponentProps) {
-  const { post } = loaderData;
+  if (!loaderData) {
+    return <h1>Error: Data not loaded.</h1>;
+  }
+  const { post } = loaderData as { post: SanityDocument | undefined | null };
+
+  if (!post) {
+    return <h1>404 Post Not Found</h1>;
+  }
   const postImageUrl = post.image
     ? urlFor(post.image)?.width(550).height(310).url()
     : null;
