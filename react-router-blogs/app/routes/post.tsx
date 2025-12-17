@@ -3,10 +3,9 @@ import {
   createImageUrlBuilder,
   type SanityImageSource,
 } from "@sanity/image-url";
-import type { SanityDocument } from "@sanity/client";
 import { PortableText } from "@portabletext/react";
-import type { Route } from "../+types/root";
 import { client } from "~/sanity/client";
+import type { Route } from "./+types/post";
 
 const { projectId, dataset } = client.config();
 const urlFor = (source: SanityImageSource) =>
@@ -14,62 +13,57 @@ const urlFor = (source: SanityImageSource) =>
     ? createImageUrlBuilder({ projectId, dataset }).image(source)
     : null;
 
-const POST_QUERY = `*[_type == "post" && slug.current == $slug][0] {
-  "title": title[$lang],
-  "body": body[$lang],
-  publishedAt,
-  image,
-  slug,
-  // Include any other fields you localized
-}`;
-
 export async function loader({ params }: Route.LoaderArgs) {
   const { lang, slug } = params;
-  if (!lang || !slug) {
-    throw new Response("Language or slug missing in URL parameters.", {
-      status: 400,
-    });
-  }
-  return {
-    post: await client.fetch<SanityDocument>(POST_QUERY, { lang, slug }),
-  };
+  const post = await client.fetch(
+    `*[_type == "post" && slug.current == $slug][0]{ "title": title[$lang], "body": body[$lang], publishedAt, image }`,
+    { lang, slug }
+  );
+  if (!post) throw new Response("Not Found", { status: 404 });
+  return { post };
 }
 
-export default function Component({ loaderData }: Route.ComponentProps) {
-  if (!loaderData) {
-    return <h1>Error: Data not loaded.</h1>;
-  }
+export default function PostPage({ loaderData }: Route.ComponentProps) {
+  const { post } = loaderData;
   const { lang } = useParams();
 
-  const { post } = loaderData as { post: SanityDocument | undefined | null };
-
-  if (!post) {
-    return <h1>404 Post Not Found</h1>;
-  }
-
-  const postImageUrl = post.image
-    ? urlFor(post.image)?.width(550).height(310).url()
-    : null;
-
   return (
-    <main className="container mx-auto min-h-screen max-w-3xl p-8 flex flex-col gap-4">
-      <Link to={`/${lang}`} className="hover:underline">
-        ← Back to posts
-      </Link>
-      {postImageUrl && (
-        <img
-          src={postImageUrl}
-          alt={post.title}
-          className="aspect-video rounded-xl"
-          width="550"
-          height="310"
-        />
-      )}
-      <h1 className="text-4xl font-bold mb-8">{post.title}</h1>
-      <div className="prose">
-        <p>Published: {new Date(post.publishedAt).toLocaleDateString()}</p>
-        {Array.isArray(post.body) && <PortableText value={post.body} />}
+    <article className="min-h-screen text-gray-200 pb-24">
+      <div className="max-w-3xl mx-auto px-6 pt-12">
+        <Link
+          to={`/${lang}`}
+          className="text-sm font-bold text-gray-500 hover:text-blue-500 transition-colors flex items-center gap-2 mb-12"
+        >
+          <span>←</span> ALL POSTS
+        </Link>
+
+        <header className="mb-12 space-y-6">
+          <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white leading-none">
+            {post.title}
+          </h1>
+          <div className="flex items-center gap-4 border-l-2 border-blue-600 pl-6 py-2">
+            <p className="text-xs font-bold tracking-widest uppercase text-gray-500">
+              Published {new Date(post.publishedAt).toLocaleDateString()}
+            </p>
+          </div>
+        </header>
+
+        {post.image && (
+          <img
+            src={urlFor(post.image)?.width(1200).url() || ""}
+            className="rounded-3xl border border-white/10 mb-16 shadow-2xl"
+            alt=""
+          />
+        )}
+
+        <div
+          className="prose prose-invert prose-blue prose-lg max-w-none 
+          prose-headings:text-white prose-p:text-gray-400 prose-p:leading-relaxed 
+          prose-strong:text-white prose-code:text-blue-400"
+        >
+          <PortableText value={post.body} />
+        </div>
       </div>
-    </main>
+    </article>
   );
 }
